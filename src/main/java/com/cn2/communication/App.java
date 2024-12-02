@@ -5,6 +5,12 @@ import java.net.*;
 
 import javax.swing.JFrame;
 import javax.swing.JTextField;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.SourceDataLine;
+import javax.sound.sampled.TargetDataLine;
 import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
@@ -27,10 +33,14 @@ public class App extends Frame implements WindowListener, ActionListener {
 	final static String newline="\n";		
 	static JButton callButton;				
 	
-    static DatagramSocket sendSocket;
-    static DatagramSocket receiveSocket;
-    static int PORT = 9988;
-    static String PEER_ADDRESS = "127.0.0.1";
+    static DatagramSocket chatSendSocket;
+    static DatagramSocket chatReceiveSocket;
+    static DatagramSocket voipSendSocket;
+    static DatagramSocket voipReceiveSocket;
+    static int CHAT_PORT = 9988;
+    static int VOIP_PORT = 9977;
+    static String IP_ADDRESS = "127.0.0.1";
+    boolean callActive = false;
 	
 	/**
 	 * Construct the app's frame and initialize important parameters
@@ -97,8 +107,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 		 * 2. 
 		 */
         try {
-            sendSocket = new DatagramSocket();
-            receiveSocket = new DatagramSocket(PORT);
+            chatSendSocket = new DatagramSocket();
+            chatReceiveSocket = new DatagramSocket(CHAT_PORT);
+            voipSendSocket = new DatagramSocket();
+            voipReceiveSocket = new DatagramSocket(VOIP_PORT);
         } catch (SocketException e) {
             e.printStackTrace();
             return;
@@ -110,11 +122,11 @@ public class App extends Frame implements WindowListener, ActionListener {
                     byte[] buffer = new byte[1024];
                     
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    receiveSocket.receive(packet); // Wait for a packet to arrive
+                    chatReceiveSocket.receive(packet); // Wait for a packet to arrive
             
                     String message = new String(packet.getData(), 0, packet.getLength()); // Extract package
             
-                    textArea.append("Peer: " + message + newline);
+                    textArea.append("Remote: " + message + newline);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -128,42 +140,73 @@ public class App extends Frame implements WindowListener, ActionListener {
 	 */
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		
-	
-
 		/*
 		 * Check which button was clicked.
 		 */
 		if (e.getSource() == sendButton){
-			
-			// The "Send" button was clicked
-			
             try {
                 String message = inputTextField.getText();
                 if (!message.isEmpty()) {
                     byte[] data = message.getBytes();
-                    InetAddress peerAddress = InetAddress.getByName(PEER_ADDRESS);
-                    DatagramPacket packet = new DatagramPacket(data, data.length, peerAddress, PORT);
+                    InetAddress remoteAddress = InetAddress.getByName(IP_ADDRESS);
+                    DatagramPacket packet = new DatagramPacket(data, data.length, remoteAddress, CHAT_PORT);
             
-                    sendSocket.send(packet);
+                    chatSendSocket.send(packet);
             
-                    textArea.append("You: " + message + newline);
+                    textArea.append("Local: " + message + newline);
             
                     inputTextField.setText("");
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
-            
-		
+		} else if(e.getSource() == callButton){
+            if (callButton.getText().equals("End Call")) {
+                callActive = false;
+                callButton.setText("Call");
+                return;
+            }
 			
-		}else if(e.getSource() == callButton){
-			
-			// The "Call" button was clicked
-			
-			// TODO: Your code goes here...
-			
-			
+            callActive = true;
+            callButton.setText("End Call");
+			new Thread(() -> {
+                try {
+                    // Audio format
+                    AudioFormat format = new AudioFormat(8000, 8, 1, true, true);
+
+                    // For mic audio
+                    DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
+                    TargetDataLine targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
+                    targetLine.open(format);
+                    targetLine.start();
+
+                    // For speaker audio
+                    DataLine.Info sourceInfo = new DataLine.Info(SourceDataLine.class, format);
+                    SourceDataLine sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
+                    sourceLine.open(format);
+                    sourceLine.start();
+
+                    byte[] buffer = new byte[1024];
+                    DatagramPacket packet;
+
+                    while (callActive) {
+                        int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
+
+                        // Send mic data
+                        packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(IP_ADDRESS), VOIP_PORT);
+                        voipSendSocket.send(packet);
+
+                        // Receive audio data
+                        packet = new DatagramPacket(buffer, buffer.length);
+                        voipReceiveSocket.receive(packet);
+
+                        // Play the received audio data
+                        sourceLine.write(packet.getData(), 0, packet.getLength());
+                    }
+                } catch (LineUnavailableException | IOException ex) {
+                    ex.printStackTrace();
+                }
+            }).start();
 		}
 			
 
