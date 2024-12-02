@@ -9,11 +9,8 @@ import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
 
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Color;
 import java.lang.Thread;
 
 public class App extends Frame implements WindowListener, ActionListener {
@@ -30,7 +27,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 	final static String newline="\n";		
 	static JButton callButton;				
 	
-	// TODO: Please define and initialize your variables here...
+    static DatagramSocket sendSocket;
+    static DatagramSocket receiveSocket;
+    static int PORT = 9988;
+    static String PEER_ADDRESS = "127.0.0.1";
 	
 	/**
 	 * Construct the app's frame and initialize important parameters
@@ -96,9 +96,30 @@ public class App extends Frame implements WindowListener, ActionListener {
 		/*
 		 * 2. 
 		 */
-		do{		
-			// TODO: Your code goes here...
-		}while(true);
+        try {
+            sendSocket = new DatagramSocket();
+            receiveSocket = new DatagramSocket(PORT);
+        } catch (SocketException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        new Thread(() -> {
+            do {        
+                try {
+                    byte[] buffer = new byte[1024];
+                    
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    receiveSocket.receive(packet); // Wait for a packet to arrive
+            
+                    String message = new String(packet.getData(), 0, packet.getLength()); // Extract package
+            
+                    textArea.append("Peer: " + message + newline);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } while (true);
+        }).start();
 	}
 	
 	/**
@@ -117,7 +138,23 @@ public class App extends Frame implements WindowListener, ActionListener {
 			
 			// The "Send" button was clicked
 			
-			// TODO: Your code goes here...
+            try {
+                String message = inputTextField.getText();
+                if (!message.isEmpty()) {
+                    byte[] data = message.getBytes();
+                    InetAddress peerAddress = InetAddress.getByName(PEER_ADDRESS);
+                    DatagramPacket packet = new DatagramPacket(data, data.length, peerAddress, PORT);
+            
+                    sendSocket.send(packet);
+            
+                    textArea.append("You: " + message + newline);
+            
+                    inputTextField.setText("");
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+            
 		
 			
 		}else if(e.getSource() == callButton){
