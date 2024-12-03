@@ -27,6 +27,8 @@ public class AppController {
     private boolean callActive = false;
     private Map<Integer, Boolean> callUsers = new ConcurrentHashMap<>(); // (userId, isTalking)
     private static List<String> messages = new ArrayList<>();
+    private static int userIdCounter = 1;
+    private static Map<String, Integer> userSessions = new ConcurrentHashMap<>();
 
     static {
         try {
@@ -39,21 +41,22 @@ public class AppController {
         }
 
         // Start a thread to listen for incoming messages
-        new Thread(() -> {
-            try {
-                byte[] buffer = new byte[1024];
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                while (true) {
-                    chatReceiveSocket.receive(packet); // Wait for a packet to arrive
-                    String message = new String(packet.getData(), 0, packet.getLength()); // Extract message
-                    synchronized (messages) {
-                        messages.add("Remote: " + message); // Store the message
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }).start();
+        // new Thread(() -> {
+        //     try {
+        //         byte[] buffer = new byte[1024];
+        //         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        //         while (true) {
+        //             chatReceiveSocket.receive(packet); // Wait for a packet to arrive
+        //             String message = new String(packet.getData(), 0, packet.getLength()); // Extract message
+        //             int userId = getUserIdFromPacket(packet); // Determine userId from packet
+        //             synchronized (messages) {
+        //                 messages.add("user" + userId + ": " + message); // Store the message
+        //             }
+        //         }
+        //     } catch (IOException e) {
+        //         e.printStackTrace();
+        //     }
+        // }).start();
     }
 
     @GetMapping("/messages")
@@ -63,12 +66,20 @@ public class AppController {
         }
     }
 
+    @PostMapping("/assignUserId")
+    public int assignUserId(@RequestBody String sessionId) {
+        int userId = userIdCounter++;
+        userSessions.put(sessionId, userId);
+        return userId;
+    }
+
     @PostMapping("/send")
     public void sendMessage(@RequestBody String jsonMessage) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode jsonNode = objectMapper.readTree(jsonMessage);
             String message = jsonNode.get("message").asText();
+            int userId = jsonNode.get("userId").asInt();
             
             if (!message.isEmpty()) {
                 byte[] data = message.getBytes();
@@ -77,7 +88,7 @@ public class AppController {
                 chatSendSocket.send(packet);
 
                 synchronized (messages) {
-                    messages.add("Local: " + message);
+                    messages.add("user" + userId + ": " + message);
                 }
             }
         } catch (IOException e) {
@@ -182,5 +193,11 @@ public class AppController {
     @GetMapping("/callList")
     public Map<Integer, Boolean> getCallList() {
         return new ConcurrentHashMap<>(callUsers);
+    }
+
+    private int getUserIdFromPacket(DatagramPacket packet) {
+        // Implement logic to determine userId from packet
+        // For now, return a default userId (e.g., 2)
+        return 2;
     }
 }

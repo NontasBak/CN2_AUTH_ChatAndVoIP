@@ -39,6 +39,16 @@ function App() {
     }, []);
 
     useEffect(() => {
+        const sessionId = new Date().getTime().toString();
+        axios
+            .post("http://localhost:8080/api/assignUserId", sessionId)
+            .then((response) => {
+                setUserId(response.data);
+            })
+            .catch((error) => console.error(error));
+    }, []);
+
+    useEffect(() => {
         if (messages.length > lastMessageCount) {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             setLastMessageCount(messages.length);
@@ -46,13 +56,13 @@ function App() {
     }, [messages, lastMessageCount]);
 
     const sendMessage = () => {
-        if (!message) {
+        if (!message || userId === null) {
             return;
         }
         axios
-            .post("http://localhost:8080/api/send", { message })
+            .post("http://localhost:8080/api/send", { message, userId })
             .then(() => {
-                setMessages([...messages, "Local: " + message]);
+                setMessages([...messages, "user" + userId + ": " + message]);
                 setMessage("");
             })
             .catch((error) => console.error(error));
