@@ -28,7 +28,6 @@ public class AppController {
     private Map<Integer, Boolean> callUsers = new ConcurrentHashMap<>(); // (userId, isTalking)
     private static List<String> messages = new ArrayList<>();
     private static int userIdCounter = 1;
-    private static Map<String, Integer> userSessions = new ConcurrentHashMap<>();
 
     static {
         try {
@@ -67,9 +66,8 @@ public class AppController {
     }
 
     @PostMapping("/assignUserId")
-    public int assignUserId(@RequestBody String sessionId) {
+    public int assignUserId() {
         int userId = userIdCounter++;
-        userSessions.put(sessionId, userId);
         return userId;
     }
 

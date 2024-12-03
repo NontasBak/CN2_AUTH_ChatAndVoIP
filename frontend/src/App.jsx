@@ -39,9 +39,8 @@ function App() {
     }, []);
 
     useEffect(() => {
-        const sessionId = new Date().getTime().toString();
         axios
-            .post("http://localhost:8080/api/assignUserId", sessionId)
+            .post("http://localhost:8080/api/assignUserId")
             .then((response) => {
                 setUserId(response.data);
             })
