@@ -1,31 +1,23 @@
 # To run both the backend and frontend: make
 # To stop both: make stop
-JAVA = java
-MAIN_CLASS = com.cn2.communication.App
-OUT_DIR = target/classes
-SCALE = 3 # Lower this if the GUI is too big
-
-all: build run
+all: build run-backend run-frontend
 
 build:
 	mvn compile
 	cd frontend && npm install
 
-run: run-backend run-frontend
-	@echo "Both frontend and backend are running..."
-
 run-backend:
-	mvn spring-boot:run & echo $$! > backend.pid
+	mvn spring-boot:run &
 
 run-frontend:
-	cd frontend && npm run dev & echo $$! > frontend.pid
+	cd frontend && npm run dev &
     
+# This is a workaround to kill the frontend and backend processes
+# Ignore the "BUILD FAILURE" error.
 stop:
 	@echo "Stopping backend and frontend..."
-	@-pkill -F backend.pid 2>/dev/null || true
-	@-pkill -F frontend.pid 2>/dev/null || true
-	@rm -f backend.pid frontend.pid
+	cd frontend && npm run kill-ports 
+	@echo "Ports killed."
 
 clean:
 	mvn clean
-	cd frontend && npm run clean
