@@ -21,11 +21,13 @@ public class AppController {
     private static DatagramSocket chatReceiveSocket;
     private static DatagramSocket voipSendSocket;
     private static DatagramSocket voipReceiveSocket;
-    private static final int CHAT_PORT = 9988;
-    private static final int VOIP_PORT = 9977;
-    private static final String IP_ADDRESS = "127.0.0.1";
+    private static final int CHAT_PORT = 11223;
+    private static final int VOIP_PORT = 33445;
+    private static final String IP_ADDRESS = "192.168.1.15";
     private boolean callActive = false;
     private static List<String> messages = new ArrayList<>();
+    private TargetDataLine targetLine;
+    private SourceDataLine sourceLine;
 
     static {
         try {
@@ -86,6 +88,9 @@ public class AppController {
 
     @PostMapping("/call")
     public void startCall() {
+        if(callActive) {
+            return;
+        }
         callActive = true;
 
         new Thread(() -> {
@@ -95,13 +100,13 @@ public class AppController {
 
                 // For mic audio
                 DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
-                TargetDataLine targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
+                targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
                 targetLine.open(format);
                 targetLine.start();
 
                 // For speaker audio
                 DataLine.Info sourceInfo = new DataLine.Info(SourceDataLine.class, format);
-                SourceDataLine sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
+                sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
                 sourceLine.open(format);
                 sourceLine.start();
 
@@ -141,12 +146,25 @@ public class AppController {
 
     @PostMapping("/endCall")
     public void endCall(@RequestBody String jsonUserId) {
+        if (!callActive) {
+            return;
+        }
+
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode jsonNode = objectMapper.readTree(jsonUserId);
             int userId = jsonNode.get("userId").asInt();
 
             callActive = false;
+
+            if (targetLine != null && targetLine.isOpen()) {
+                targetLine.stop();
+                targetLine.close();
+            }
+            if (sourceLine != null && sourceLine.isOpen()) {
+                sourceLine.stop();
+                sourceLine.close();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

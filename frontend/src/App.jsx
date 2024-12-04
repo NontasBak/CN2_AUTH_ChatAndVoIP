@@ -14,7 +14,7 @@ function App() {
     useEffect(() => {
         const fetchMessages = () => {
             axios
-                .get("http://localhost:8080/api/messages")
+                .get("http://localhost:8099/api/messages")
                 .then((response) => {
                     // console.log(response.data);
                     if (Array.isArray(response.data)) {
@@ -50,7 +50,7 @@ function App() {
             return;
         }
         axios
-            .post("http://localhost:8080/api/send", { message })
+            .post("http://localhost:8099/api/send", { message })
             .then(() => {
                 setMessages([...messages, "Local: " + message]);
                 setMessage("");
@@ -60,7 +60,7 @@ function App() {
 
     const startCall = () => {
         axios
-            .post("http://localhost:8080/api/call")
+            .post("http://localhost:8099/api/call")
             .then((response) => {
                 setUserId(response.data);
                 setCallActive(true);
@@ -72,7 +72,7 @@ function App() {
     const endCall = () => {
         console.log("Ending call for userId:", userId);
         axios
-            .post("http://localhost:8080/api/endCall", { userId })
+            .post("http://localhost:8099/api/endCall", { userId })
             .then(() => {
                 setCallActive(false);
                 setUserId(null);
