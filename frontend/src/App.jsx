@@ -45,6 +45,22 @@ function App() {
         }
     }, [messages, lastMessageCount]);
 
+    useEffect(() => {
+        const handleKeyPress = (event) => {
+            if (!message) {
+                return;
+            }
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        };
+
+        window.addEventListener("keypress", handleKeyPress);
+        return () => {
+            window.removeEventListener("keypress", handleKeyPress);
+        };
+    }, [message]);
+
     const sendMessage = () => {
         if (!message) {
             return;
@@ -85,9 +101,18 @@ function App() {
         <div className="flex flex-col items-center pt-8 text-2xl gap-4 h-screen">
             <h1 className="text-3xl font-semibold">Chat App</h1>
             <div className="p-4 w-1/2 h-1/2 border border-gray-400">
-                <div className="overflow-y-scroll w-full h-full">
+                <div className="overflow-y-scroll w-full h-full flex flex-col pr-3">
                     {messages.map((msg, index) => (
-                        <div key={index}>{msg}</div>
+                        <div
+                            key={index}
+                            className={`p-2 my-2 rounded-lg max-w-xs ${
+                                msg.startsWith("Local:")
+                                    ? "bg-blue-200 self-end"
+                                    : "bg-gray-200 self-start"
+                            }`}
+                        >
+                            {msg.replace(/^Local: |^Remote: /, '')}
+                        </div>
                     ))}
                     <div ref={messagesEndRef} />
                 </div>
