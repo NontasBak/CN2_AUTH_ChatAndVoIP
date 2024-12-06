@@ -9,11 +9,8 @@ import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
 
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Color;
 import java.lang.Thread;
 
 public class App extends Frame implements WindowListener, ActionListener {
@@ -119,17 +116,30 @@ public class App extends Frame implements WindowListener, ActionListener {
 		/*
 		 * 1. Create the app's window
 		 */
-		App app = new App("CN2 - AUTH"); // TODO: You can add the title that will displayed on the Window of the App
-											// here
+		App app = new App("CN2 - AUTH - Team K"); // Create the app's window
+
 		app.setSize(500, 250);
 		app.setVisible(true);
 
 		/*
-		 * 2.
+		 * 2. Continuously listen for incoming messages
 		 */
-		do {
-			// TODO: Your code goes here...
-		} while (true);
+		new Thread(() -> {
+			byte[] buffer = new byte[1024]; // Allocates a buffer to store incoming data
+			while (true) {
+				try {
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					messageSocket.receive(packet); // Waits for an incoming message on the message socket
+					String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the
+																									// received data and
+																									// convert it to a
+																									// string
+					textArea.append("Peer: " + receivedMessage + newline);
+				} catch (IOException e) {
+					System.err.println("Error receiving message: " + e.getMessage());
+				}
+			}
+		}).start();
 	}
 
 	/**
@@ -160,6 +170,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 				try {
 					messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
 					textArea.append("You: " + message + newline); // Display message in GUI
+					inputTextField.setText(""); // Clear the inputTextField
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
