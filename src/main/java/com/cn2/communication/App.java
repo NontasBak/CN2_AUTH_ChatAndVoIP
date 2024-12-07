@@ -32,10 +32,18 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static Color gray;
 	final static String newline = "\n";
 	static JButton callButton;
+	static JButton switchProtocolButton; // Button to switch protocols
+	static boolean usingUDP = true; // Default to UDP protocol
 
 	// UDP variables
 	static DatagramSocket messageSocket; // For receiving/sending messages
 	static DatagramSocket voiceSocket; // For receiving/sending call requests
+
+	// TCP Sockets for messaging and voice
+	static ServerSocket tcpMessageServerSocket; // Server-side TCP socket for messaging
+	static Socket tcpMessageSocket; // Client-side TCP socket for messaging
+	static ServerSocket tcpVoiceServerSocket; // Server-side TCP socket for voice
+	static Socket tcpVoiceSocket; // Client-side TCP socket for voice
 
 	// Local Ports for message and voice communication
 	static final int LOCAL_PORT_MESSAGE = 12345; // Local port for receiving messages
@@ -47,10 +55,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 	static final String REMOTE_IP = "127.0.0.1"; // Replace with the remote peer's IP address
 
-    // For calling
-    boolean callActive = false;
-    TargetDataLine targetLine;
-    SourceDataLine sourceLine;
+	// For calling
+	boolean callActive = false;
+	TargetDataLine targetLine;
+	SourceDataLine sourceLine;
 
 	/**
 	 * Construct the app's frame and initialize important parameters
@@ -82,6 +90,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// Setting up the buttons
 		sendButton = new JButton("Send");
 		callButton = new JButton("Call");
+		switchProtocolButton = new JButton("Switch to TCP");
 
 		/*
 		 * 2. Adding the components to the GUI
@@ -90,16 +99,27 @@ public class App extends Frame implements WindowListener, ActionListener {
 		add(inputTextField);
 		add(sendButton);
 		add(callButton);
+		add(switchProtocolButton);
 
 		/*
 		 * 3. Linking the buttons to the ActionListener
 		 */
 		sendButton.addActionListener(this);
 		callButton.addActionListener(this);
+		switchProtocolButton.addActionListener(this);
 
 		/*
-		 * 4. UDP Initialization (Message and Voice sockets)
+		 * 4. UDP Initialization (UDP set us default protocol)
 		 */
+
+		initUDPSockets();
+
+	}
+
+	/**
+	 * Initializes UDP sockets for message and voice communication.
+	 */
+	private void initUDPSockets() {
 		try {
 			// Initialize the message socket to listen for incoming messages
 			messageSocket = new DatagramSocket(LOCAL_PORT_MESSAGE);
@@ -107,12 +127,69 @@ public class App extends Frame implements WindowListener, ActionListener {
 			// Initialize the voice socket to listen for incoming voice data
 			voiceSocket = new DatagramSocket(LOCAL_PORT_VOICE);
 
-			System.out.println("Sockets initialized for message and voice communication.");
+			System.out.println("UDP sockets initialized for message and voice communication.");
 		} catch (SocketException e) {
 			System.err.println("Error initializing UDP sockets: " + e.getMessage());
 			e.printStackTrace();
 		}
+	}
 
+	/**
+	 * Deinitializes UDP sockets (closes them).
+	 */
+	private void deinitUDPSockets() {
+		if (messageSocket != null && !messageSocket.isClosed()) {
+			messageSocket.close();
+		}
+		if (voiceSocket != null && !voiceSocket.isClosed()) {
+			voiceSocket.close();
+		}
+		System.out.println("UDP sockets deinitialized.");
+	}
+
+	/**
+	 * Initializes TCP sockets for message and voice communication.
+	 */
+	private void initTCPSockets() {
+		try {
+
+			// Initialize the server and client TCP sockets for message communication
+			tcpMessageServerSocket = new ServerSocket(LOCAL_PORT_MESSAGE);
+			tcpMessageSocket = new Socket(REMOTE_IP, REMOTE_PORT_MESSAGE);
+
+			// Initialize the server and client TCP sockets for voice communication
+			tcpVoiceServerSocket = new ServerSocket(LOCAL_PORT_VOICE);
+			tcpVoiceSocket = new Socket(REMOTE_IP, REMOTE_PORT_VOICE);
+
+			System.out.println("TCP sockets initialized for message and voice communication.");
+		} catch (IOException e) {
+			System.err.println("Error initializing TCP sockets: " + e.getMessage());
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Deinitializes TCP sockets (closes them).
+	 */
+	private void deinitTCPSockets() {
+		try {
+			if (tcpMessageServerSocket != null && !tcpMessageServerSocket.isClosed()) {
+				tcpMessageServerSocket.close();
+			}
+			if (tcpMessageSocket != null && !tcpMessageSocket.isClosed()) {
+				tcpMessageSocket.close();
+			}
+			if (tcpVoiceServerSocket != null && !tcpVoiceServerSocket.isClosed()) {
+				tcpVoiceServerSocket.close();
+			}
+			if (tcpVoiceSocket != null && !tcpVoiceSocket.isClosed()) {
+				tcpVoiceSocket.close();
+			}
+			System.out.println("TCP sockets deinitialized.");
+		} catch (IOException e) {
+			System.err.println("Error deinitializing TCP sockets: " + e.getMessage());
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -133,16 +210,24 @@ public class App extends Frame implements WindowListener, ActionListener {
 		 * 2. Continuously listen for incoming messages
 		 */
 		new Thread(() -> {
-			byte[] buffer = new byte[1024]; // Allocates a buffer to store incoming data
 			while (true) {
 				try {
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					messageSocket.receive(packet); // Waits for an incoming message on the message socket
-					String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the
-																									// received data and
-																									// convert it to a
-																									// string
-					textArea.append("Peer: " + receivedMessage + newline);
+					if (usingUDP) {
+						// Handle UDP messages
+						byte[] buffer = new byte[1024];
+						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+						messageSocket.receive(packet); // Wait for incoming message on the UDP socket
+						String receivedMessage = new String(packet.getData(), 0, packet.getLength());
+						textArea.append("Peer: " + receivedMessage + newline);
+					} else {
+						// Handle TCP messages
+						BufferedReader reader = new BufferedReader(
+								new InputStreamReader(tcpMessageSocket.getInputStream()));
+						String receivedMessage = reader.readLine(); // Read incoming message line by line
+						if (receivedMessage != null) {
+							textArea.append("Peer: " + receivedMessage + newline);
+						}
+					}
 				} catch (IOException e) {
 					System.err.println("Error receiving message: " + e.getMessage());
 				}
@@ -162,84 +247,124 @@ public class App extends Frame implements WindowListener, ActionListener {
 		 * Check which button was clicked.
 		 */
 		if (e.getSource() == sendButton) {
-
-			// The "Send" button was clicked
+			// Send message logic (UDP or TCP, based on protocol)
 			String message = inputTextField.getText();
 
 			if (!message.isEmpty()) {
-				// Create a DatagramPacket with the message data and send it to the remote
-				// peer's message port
-
 				byte[] messageData = message.getBytes(); // Converts the message into a byte array
-
-				DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
-						new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
-
 				try {
-					messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
+					if (usingUDP) {
+						// Send message via UDP
+						DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
+								new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
+						messageSocket.send(messagePacket);
+					} else {
+						// Send message via TCP
+						OutputStream os = tcpMessageSocket.getOutputStream();
+						os.write(messageData);
+						os.flush();
+					}
+
 					textArea.append("You: " + message + newline); // Display message in GUI
 					inputTextField.setText(""); // Clear the inputTextField
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
 			}
-
 		} else if (e.getSource() == callButton) {
 
-            if (callActive) {
-                callActive = false;
-                callButton.setText("Call");
+			if (callActive) {
+				callActive = false;
+				callButton.setText("Call");
 
-                if (targetLine != null && targetLine.isOpen()) {
-                    targetLine.stop();
-                    targetLine.close();
-                }
-                if (sourceLine != null && sourceLine.isOpen()) {
-                    sourceLine.stop();
-                    sourceLine.close();
-                }
-                return;
-            }
-            callActive = true;
-            callButton.setText("End Call");
+				if (targetLine != null && targetLine.isOpen()) {
+					targetLine.stop();
+					targetLine.close();
+				}
+				if (sourceLine != null && sourceLine.isOpen()) {
+					sourceLine.stop();
+					sourceLine.close();
+				}
+				return;
+			}
+			callActive = true;
+			callButton.setText("End Call");
 			new Thread(() -> {
-                try {
-                    // Audio format
-                    AudioFormat format = new AudioFormat(8000, 8, 1, true, true);
+				try {
+					// Audio format
+					AudioFormat format = new AudioFormat(8000, 8, 1, true, true);
 
-                    // For mic audio
-                    DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
-                    targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
-                    targetLine.open(format);
-                    targetLine.start();
+					// For mic audio
+					DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
+					targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
+					targetLine.open(format);
+					targetLine.start();
 
-                    // For speaker audio
-                    DataLine.Info sourceInfo = new DataLine.Info(SourceDataLine.class, format);
-                    sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
-                    sourceLine.open(format);
-                    sourceLine.start();
+					// For speaker audio
+					DataLine.Info sourceInfo = new DataLine.Info(SourceDataLine.class, format);
+					sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
+					sourceLine.open(format);
+					sourceLine.start();
 
-                    byte[] buffer = new byte[1024];
-                    DatagramPacket packet;
+					byte[] buffer = new byte[1024];
+					DatagramPacket packet;
 
-                    while (callActive) {
-                        int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
+					while (callActive) {
+						int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
 
-                        // Send mic data
-                        packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP), REMOTE_PORT_VOICE);
-                        voiceSocket.send(packet);
+						if (usingUDP) {
 
-                        // Receive audio data
-                        packet = new DatagramPacket(buffer, buffer.length);
-                        voiceSocket.receive(packet);
+							// Send mic data
+							packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP),
+									REMOTE_PORT_VOICE);
+							voiceSocket.send(packet);
 
-                        // Play the received audio data
-                        sourceLine.write(packet.getData(), 0, packet.getLength());
-                    }
-                } catch (LineUnavailableException | IOException ex) {
-                    ex.printStackTrace();
-                }
-            }).start();
+							// Receive audio data
+							packet = new DatagramPacket(buffer, buffer.length);
+							voiceSocket.receive(packet);
+						} else {
+							// Send mic data
+							OutputStream voiceOutStream = tcpVoiceSocket.getOutputStream();
+							voiceOutStream.write(buffer, 0, bytesRead);
+							voiceOutStream.flush();
+
+							// Receive audio data
+							InputStream voiceInStream = tcpVoiceSocket.getInputStream();
+							bytesRead = voiceInStream.read(buffer, 0, buffer.length);
+						}
+
+						// Play the received audio data
+						sourceLine.write(buffer, 0, bytesRead);
+					}
+				} catch (LineUnavailableException | IOException ex) {
+					ex.printStackTrace();
+				}
+			}).start();
+		} else if (e.getSource() == switchProtocolButton) {
+
+			// Switch between UDP and TCP
+
+			if (usingUDP) {
+
+				// Switch to TCP
+
+				System.out.println("Switching to TCP protocol...");
+				deinitUDPSockets(); // Close UDP sockets
+				initTCPSockets(); // Initialize TCP sockets
+				usingUDP = false;
+				switchProtocolButton.setText("Switch to UDP");
+				textArea.append("Switched to TCP protocol." + newline);
+			} else {
+
+				// Switch to UDP
+
+				System.out.println("Switching to UDP protocol...");
+				deinitTCPSockets(); // Close TCP sockets
+				initUDPSockets(); // Initialize UDP sockets
+				usingUDP = true;
+				switchProtocolButton.setText("Switch to TCP");
+				textArea.append("Switched to UDP protocol." + newline);
+			}
 		}
 
 	}
@@ -262,6 +387,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 	@Override
 	public void windowClosing(WindowEvent e) {
 		// TODO Auto-generated method stub
+
+		deinitUDPSockets();
+		deinitTCPSockets();
+
 		dispose();
 		System.exit(0);
 	}
