@@ -17,38 +17,57 @@ import java.util.Map;
 @RequestMapping("/api")
 public class AppController {
 
-    private static DatagramSocket chatSendSocket;
-    private static DatagramSocket chatReceiveSocket;
-    private static DatagramSocket voipSendSocket;
-    private static DatagramSocket voipReceiveSocket;
-    private static final int CHAT_PORT = 11223;
-    private static final int VOIP_PORT = 33445;
-    private static final String IP_ADDRESS = "192.168.1.15";
-    private boolean callActive = false;
-    private static List<String> messages = new ArrayList<>();
-    private TargetDataLine targetLine;
-    private SourceDataLine sourceLine;
+	// UDP variables
+	static DatagramSocket messageSocket; // For receiving/sending messages
+	static DatagramSocket voiceSocket; // For receiving/sending call requests
+
+	// Local Ports for message and voice communication
+	static final int LOCAL_PORT_MESSAGE = 12345; // Local port for receiving messages
+	static final int LOCAL_PORT_VOICE = 12346; // Local port for receiving voice data
+
+	// Remote Ports for message and voice communication
+	static final int REMOTE_PORT_MESSAGE = 12345; // Remote port for sending messages
+	static final int REMOTE_PORT_VOICE = 12346; // Remote port for sending voice
+
+	static final String REMOTE_IP = "127.0.0.1"; // Replace with the remote peer's IP address
+
+    // For calling
+    boolean callActive = false;
+    TargetDataLine targetLine;
+    SourceDataLine sourceLine;
+
+    // For keeping track of messages
+    static List<String> messages = new ArrayList<>();
 
     static {
-        try {
-            chatSendSocket = new DatagramSocket();
-            chatReceiveSocket = new DatagramSocket(CHAT_PORT);
-            voipSendSocket = new DatagramSocket();
-            voipReceiveSocket = new DatagramSocket(VOIP_PORT);
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
+		try {
+			// Initialize the message socket to listen for incoming messages
+			messageSocket = new DatagramSocket(LOCAL_PORT_MESSAGE);
+
+			// Initialize the voice socket to listen for incoming voice data
+			voiceSocket = new DatagramSocket(LOCAL_PORT_VOICE);
+
+			System.out.println("Sockets initialized for message and voice communication.");
+		} catch (SocketException e) {
+			System.err.println("Error initializing UDP sockets: " + e.getMessage());
+			e.printStackTrace();
+		}
 
         // Start a thread to listen for incoming messages
         new Thread(() -> {
+            byte[] buffer = new byte[1024];
             try {
-                byte[] buffer = new byte[1024];
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                
+                
                 while (true) {
-                    chatReceiveSocket.receive(packet); // Wait for a packet to arrive
-                    String message = new String(packet.getData(), 0, packet.getLength()); // Extract message
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    messageSocket.receive(packet); // Waits for an incoming message on the message socket
+                    String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the
+																									// received data and
+																									// convert it to a
+																									// string
                     synchronized (messages) {
-                        messages.add("Remote: " + message); // Store the message
+                        messages.add("Remote: " + receivedMessage); // Store the message
                     }
                 }
             } catch (IOException e) {
@@ -72,11 +91,16 @@ public class AppController {
             String message = jsonNode.get("message").asText();
             
             if (!message.isEmpty()) {
-                byte[] data = message.getBytes();
-                InetAddress remoteAddress = InetAddress.getByName(IP_ADDRESS);
-                DatagramPacket packet = new DatagramPacket(data, data.length, remoteAddress, CHAT_PORT);
-                chatSendSocket.send(packet);
-
+                byte[] messageData = message.getBytes(); // Converts the message into a byte array
+                
+                try {
+                    DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
+						new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
+                    messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                
                 synchronized (messages) {
                     messages.add("Local: " + message);
                 }
@@ -117,12 +141,12 @@ public class AppController {
                     int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
 
                     // Send mic data
-                    packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(IP_ADDRESS), VOIP_PORT);
-                    voipSendSocket.send(packet);
+                    packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP), REMOTE_PORT_VOICE);
+                    voiceSocket.send(packet);
 
                     // Receive audio data
                     packet = new DatagramPacket(buffer, buffer.length);
-                    voipReceiveSocket.receive(packet);
+                    voiceSocket.receive(packet);
 
                     // boolean isTalking = detectTalking(buffer, bytesRead);
 
