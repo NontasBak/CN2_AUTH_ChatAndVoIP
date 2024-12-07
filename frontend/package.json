@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "kill-ports": "kill-port 4141 && kill-port 8080"
+    "kill-ports": "kill-port 4141 && kill-port 8099"
   },
   "dependencies": {
     "axios": "^1.7.8",
