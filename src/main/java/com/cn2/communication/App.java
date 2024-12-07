@@ -5,15 +5,18 @@ import java.net.*;
 
 import javax.swing.JFrame;
 import javax.swing.JTextField;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.SourceDataLine;
+import javax.sound.sampled.TargetDataLine;
 import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
 
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Color;
 import java.lang.Thread;
 
 public class App extends Frame implements WindowListener, ActionListener {
@@ -44,8 +47,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 	static final String REMOTE_IP = "127.0.0.1"; // Replace with the remote peer's IP address
 
-	// Threads for receiving and sending messages
-	static Thread receiveThread;
+    // For calling
+    boolean callActive = false;
+    TargetDataLine targetLine;
+    SourceDataLine sourceLine;
 
 	/**
 	 * Construct the app's frame and initialize important parameters
@@ -181,10 +186,60 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		} else if (e.getSource() == callButton) {
 
-			// The "Call" button was clicked
+            if (callActive) {
+                callActive = false;
+                callButton.setText("Call");
 
-			// TODO: Your code goes here...
+                if (targetLine != null && targetLine.isOpen()) {
+                    targetLine.stop();
+                    targetLine.close();
+                }
+                if (sourceLine != null && sourceLine.isOpen()) {
+                    sourceLine.stop();
+                    sourceLine.close();
+                }
+                return;
+            }
+            callActive = true;
+            callButton.setText("End Call");
+			new Thread(() -> {
+                try {
+                    // Audio format
+                    AudioFormat format = new AudioFormat(8000, 8, 1, true, true);
 
+                    // For mic audio
+                    DataLine.Info targetInfo = new DataLine.Info(TargetDataLine.class, format);
+                    targetLine = (TargetDataLine) AudioSystem.getLine(targetInfo);
+                    targetLine.open(format);
+                    targetLine.start();
+
+                    // For speaker audio
+                    DataLine.Info sourceInfo = new DataLine.Info(SourceDataLine.class, format);
+                    sourceLine = (SourceDataLine) AudioSystem.getLine(sourceInfo);
+                    sourceLine.open(format);
+                    sourceLine.start();
+
+                    byte[] buffer = new byte[1024];
+                    DatagramPacket packet;
+
+                    while (callActive) {
+                        int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
+
+                        // Send mic data
+                        packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP), REMOTE_PORT_VOICE);
+                        voiceSocket.send(packet);
+
+                        // Receive audio data
+                        packet = new DatagramPacket(buffer, buffer.length);
+                        voiceSocket.receive(packet);
+
+                        // Play the received audio data
+                        sourceLine.write(packet.getData(), 0, packet.getLength());
+                    }
+                } catch (LineUnavailableException | IOException ex) {
+                    ex.printStackTrace();
+                }
+            }).start();
 		}
 
 	}
