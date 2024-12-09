@@ -19,5 +19,9 @@ stop:
 	cd frontend && npm run kill-ports 
 	@echo "Ports killed."
 
+run-normal-app:
+	java -Dsun.java2d.uiScale=3 -cp target/classes com.cn2.communication.App
+
 clean:
 	mvn clean
+

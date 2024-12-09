@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./App.css";
-import { Phone, PhoneOff, Send } from "lucide-react";
+import { Phone, PhoneOff, Send, Package } from "lucide-react";
 
 function App() {
     const [messages, setMessages] = useState([]);
@@ -10,6 +10,7 @@ function App() {
     const [lastMessageCount, setLastMessageCount] = useState(0);
     const [userId, setUserId] = useState(null);
     const messagesEndRef = useRef(0);
+    const [usingUDP, setUsingUDP] = useState(true);
 
     useEffect(() => {
         const fetchMessages = () => {
@@ -97,6 +98,16 @@ function App() {
             .catch((error) => console.error(error));
     };
 
+    const switchProtocol = () => {
+        axios
+            .post("http://localhost:8099/api/switchProtocol")
+            .then(() => {
+                setUsingUDP(!usingUDP);
+                console.log(`Switched to ${usingUDP ? "TCP" : "UDP"} protocol`);
+            })
+            .catch((error) => console.error(error));
+    };
+
     return (
         <div className="flex flex-col items-center pt-8 text-2xl gap-4 h-screen">
             <h1 className="text-3xl font-semibold">Chat App</h1>
@@ -111,7 +122,7 @@ function App() {
                                     : "bg-gray-200 self-start"
                             }`}
                         >
-                            {msg.replace(/^Local: |^Remote: /, '')}
+                            {msg.replace(/^Local: |^Remote: /, "")}
                         </div>
                     ))}
                     <div ref={messagesEndRef} />
@@ -137,11 +148,20 @@ function App() {
                     <Send size={22} />
                 </button>
             </div>
-            <button className="flex items-center gap-2 hover:bg-gray-200 transition-colors p-2 rounded-md">
+            <button
+                className="flex items-center gap-2 hover:bg-gray-200 transition-colors p-2 rounded-md"
+                onClick={callActive ? endCall : startCall}
+            >
                 {callActive ? <PhoneOff size={22} /> : <Phone size={22} />}
-                <h3 onClick={callActive ? endCall : startCall}>
-                    {callActive ? "End Call" : "Start Call"}
-                </h3>
+                <h3>{callActive ? "End Call" : "Start Call"}</h3>
+            </button>
+            <button
+                className="flex items-center gap-2 hover:bg-gray-200 transition-colors p-2 rounded-md"
+                onClick={switchProtocol}
+                disabled={true}
+            >
+                <Package size={22}/>
+                Switch to {usingUDP ? "TCP" : "UDP"}
             </button>
         </div>
     );

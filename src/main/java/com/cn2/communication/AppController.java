@@ -39,6 +39,15 @@ public class AppController {
     // For keeping track of messages
     static List<String> messages = new ArrayList<>();
 
+    // TCP Sockets for messaging and voice
+    static ServerSocket tcpMessageServerSocket; // Server-side TCP socket for messaging
+    static Socket tcpMessageSocket; // Client-side TCP socket for messaging
+    static ServerSocket tcpVoiceServerSocket; // Server-side TCP socket for voice
+    static Socket tcpVoiceSocket; // Client-side TCP socket for voice
+
+    static boolean usingUDP = true; // Default to UDP protocol
+    static volatile boolean running = true;
+
     static {
 		try {
 			// Initialize the message socket to listen for incoming messages
@@ -57,17 +66,22 @@ public class AppController {
         new Thread(() -> {
             byte[] buffer = new byte[1024];
             try {
-                
-                
-                while (true) {
-                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    messageSocket.receive(packet); // Waits for an incoming message on the message socket
-                    String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the
-																									// received data and
-																									// convert it to a
-																									// string
-                    synchronized (messages) {
-                        messages.add("Remote: " + receivedMessage); // Store the message
+                while (running) {
+                    if (usingUDP) {
+                        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                        messageSocket.receive(packet); // Waits for an incoming message on the message socket
+                        String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the received data and convert it to a string
+                        synchronized (messages) {
+                            messages.add("Remote: " + receivedMessage); // Store the message
+                        }
+                    } else {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(tcpMessageSocket.getInputStream()));
+                        String receivedMessage = reader.readLine(); // Read incoming message line by line
+                        if (receivedMessage != null) {
+                            synchronized (messages) {
+                                messages.add("Remote: " + receivedMessage); // Store the message
+                            }
+                        }
                     }
                 }
             } catch (IOException e) {
@@ -94,9 +108,15 @@ public class AppController {
                 byte[] messageData = message.getBytes(); // Converts the message into a byte array
                 
                 try {
-                    DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
-						new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
-                    messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
+                    if (usingUDP) {
+                        DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
+                            new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
+                        messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
+                    } else {
+                        OutputStream os = tcpMessageSocket.getOutputStream();
+                        os.write(messageData);
+                        os.flush();
+                    }
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -140,18 +160,27 @@ public class AppController {
                 while (callActive) {
                     int bytesRead = targetLine.read(buffer, 0, buffer.length); // Capture audio data from the mic
 
-                    // Send mic data
-                    packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP), REMOTE_PORT_VOICE);
-                    voiceSocket.send(packet);
+                    if (usingUDP) {
+                        // Send mic data
+                        packet = new DatagramPacket(buffer, bytesRead, InetAddress.getByName(REMOTE_IP), REMOTE_PORT_VOICE);
+                        voiceSocket.send(packet);
 
-                    // Receive audio data
-                    packet = new DatagramPacket(buffer, buffer.length);
-                    voiceSocket.receive(packet);
+                        // Receive audio data
+                        packet = new DatagramPacket(buffer, buffer.length);
+                        voiceSocket.receive(packet);
+                    } else {
+                        // Send mic data
+                        OutputStream voiceOutStream = tcpVoiceSocket.getOutputStream();
+                        voiceOutStream.write(buffer, 0, bytesRead);
+                        voiceOutStream.flush();
 
-                    // boolean isTalking = detectTalking(buffer, bytesRead);
+                        // Receive audio data
+                        InputStream voiceInStream = tcpVoiceSocket.getInputStream();
+                        bytesRead = voiceInStream.read(buffer, 0, buffer.length);
+                    }
 
                     // Play the received audio data
-                    sourceLine.write(packet.getData(), 0, packet.getLength());
+                    sourceLine.write(buffer, 0, bytesRead);
                 }
             } catch (LineUnavailableException | IOException ex) {
                 ex.printStackTrace();
@@ -206,6 +235,85 @@ public class AppController {
         }
 
         return false;
+    }
+
+    @PostMapping("/switchProtocol")
+    public void switchProtocol() {
+        running = false;
+        if (usingUDP) {
+            // Switch to TCP
+            deinitUDPSockets();
+            initTCPSockets();
+            usingUDP = false;
+        } else {
+            // Switch to UDP
+            deinitTCPSockets();
+            initUDPSockets();
+            usingUDP = true;
+        }
+    }
+
+    private void initUDPSockets() {
+        try {
+            // Initialize the message socket to listen for incoming messages
+            messageSocket = new DatagramSocket(LOCAL_PORT_MESSAGE);
+
+            // Initialize the voice socket to listen for incoming voice data
+            voiceSocket = new DatagramSocket(LOCAL_PORT_VOICE);
+
+            System.out.println("UDP sockets initialized for message and voice communication.");
+        } catch (SocketException e) {
+            System.err.println("Error initializing UDP sockets: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void deinitUDPSockets() {
+        if (messageSocket != null && !messageSocket.isClosed()) {
+            messageSocket.close();
+        }
+        if (voiceSocket != null && !voiceSocket.isClosed()) {
+            voiceSocket.close();
+        }
+        System.out.println("UDP sockets deinitialized.");
+    }
+
+    private void initTCPSockets() {
+        try {
+            // Initialize the server and client TCP sockets for message communication
+            tcpMessageServerSocket = new ServerSocket(LOCAL_PORT_MESSAGE);
+            tcpMessageSocket = new Socket(REMOTE_IP, REMOTE_PORT_MESSAGE);
+
+            // Initialize the server and client TCP sockets for voice communication
+            tcpVoiceServerSocket = new ServerSocket(LOCAL_PORT_VOICE);
+            tcpVoiceSocket = new Socket(REMOTE_IP, REMOTE_PORT_VOICE);
+
+            System.out.println("TCP sockets initialized for message and voice communication.");
+        } catch (IOException e) {
+            System.err.println("Error initializing TCP sockets: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void deinitTCPSockets() {
+        try {
+            if (tcpMessageServerSocket != null && !tcpMessageServerSocket.isClosed()) {
+                tcpMessageServerSocket.close();
+            }
+            if (tcpMessageSocket != null && !tcpMessageSocket.isClosed()) {
+                tcpMessageSocket.close();
+            }
+            if (tcpVoiceServerSocket != null && !tcpVoiceServerSocket.isClosed()) {
+                tcpVoiceServerSocket.close();
+            }
+            if (tcpVoiceSocket != null && !tcpVoiceSocket.isClosed()) {
+                tcpVoiceSocket.close();
+            }
+            System.out.println("TCP sockets deinitialized.");
+        } catch (IOException e) {
+            System.err.println("Error deinitializing TCP sockets: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
 }
