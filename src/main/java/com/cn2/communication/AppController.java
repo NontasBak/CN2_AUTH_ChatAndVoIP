@@ -46,7 +46,6 @@ public class AppController {
     static Socket tcpVoiceSocket; // Client-side TCP socket for voice
 
     static boolean usingUDP = true; // Default to UDP protocol
-    static volatile boolean running = true;
 
     static {
 		try {
@@ -65,8 +64,8 @@ public class AppController {
         // Start a thread to listen for incoming messages
         new Thread(() -> {
             byte[] buffer = new byte[1024];
-            try {
-                while (running) {
+            while (true) {
+                try {
                     if (usingUDP) {
                         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                         messageSocket.receive(packet); // Waits for an incoming message on the message socket
@@ -83,9 +82,9 @@ public class AppController {
                             }
                         }
                     }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
         }).start();
     }
@@ -239,7 +238,6 @@ public class AppController {
 
     @PostMapping("/switchProtocol")
     public void switchProtocol() {
-        running = false;
         if (usingUDP) {
             // Switch to TCP
             deinitUDPSockets();

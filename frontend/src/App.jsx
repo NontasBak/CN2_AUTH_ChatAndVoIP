@@ -158,7 +158,6 @@ function App() {
             <button
                 className="flex items-center gap-2 hover:bg-gray-200 transition-colors p-2 rounded-md"
                 onClick={switchProtocol}
-                disabled={true}
             >
                 <Package size={22}/>
                 Switch to {usingUDP ? "TCP" : "UDP"}
