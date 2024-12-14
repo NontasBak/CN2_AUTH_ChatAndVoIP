@@ -2,6 +2,7 @@ package com.cn2.communication;
 
 import java.io.*;
 import java.net.*;
+import java.util.Base64;
 
 import javax.swing.JFrame;
 import javax.swing.JTextField;
@@ -19,6 +20,9 @@ import java.awt.*;
 import java.awt.event.*;
 import java.lang.Thread;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
+
 public class App extends Frame implements WindowListener, ActionListener {
 
 	/*
@@ -32,8 +36,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static Color gray;
 	final static String newline = "\n";
 	static JButton callButton;
+    
 	static JButton switchProtocolButton; // Button to switch protocols
 	static boolean usingUDP = true; // Default to UDP protocol
+    static boolean transition = false; // Flag to indicate a protocol switch
 
 	// UDP variables
 	static DatagramSocket messageSocket; // For receiving/sending messages
@@ -50,8 +56,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static final int LOCAL_PORT_VOICE = 12346; // Local port for receiving voice data
 
 	// Remote Ports for message and voice communication
-	static final int REMOTE_PORT_MESSAGE = 12347; // Remote port for sending messages
-	static final int REMOTE_PORT_VOICE = 12348; // Remote port for sending voice
+	static final int REMOTE_PORT_MESSAGE = 12345; // Remote port for sending messages
+	static final int REMOTE_PORT_VOICE = 12346; // Remote port for sending voice
 
 	static final String REMOTE_IP = "127.0.0.1"; // Replace with the remote peer's IP address
 
@@ -59,6 +65,9 @@ public class App extends Frame implements WindowListener, ActionListener {
 	boolean callActive = false;
 	TargetDataLine targetLine;
 	SourceDataLine sourceLine;
+
+    // For encryption
+	static String KEY = "123456789ABCDEFG"; // 16-byte key
 
 	/**
 	 * Construct the app's frame and initialize important parameters
@@ -217,7 +226,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 						byte[] buffer = new byte[1024];
 						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 						messageSocket.receive(packet); // Wait for incoming message on the UDP socket
-						String receivedMessage = new String(packet.getData(), 0, packet.getLength());
+						String receivedMessage = decryptMessage(new String(packet.getData(), 0, packet.getLength()));
 						textArea.append("Peer: " + receivedMessage + newline);
 					} else {
 						// Handle TCP messages
@@ -225,10 +234,14 @@ public class App extends Frame implements WindowListener, ActionListener {
 								new InputStreamReader(tcpMessageSocket.getInputStream()));
 						String receivedMessage = reader.readLine(); // Read incoming message line by line
 						if (receivedMessage != null) {
+							receivedMessage = decryptMessage(receivedMessage);
 							textArea.append("Peer: " + receivedMessage + newline);
 						}
 					}
-				} catch (IOException e) {
+				} catch (Exception e) {
+                    if (transition) {
+                        continue;
+                    }
 					System.err.println("Error receiving message: " + e.getMessage());
 				}
 			}
@@ -251,40 +264,30 @@ public class App extends Frame implements WindowListener, ActionListener {
 			String message = inputTextField.getText();
 
 			if (!message.isEmpty()) {
-				byte[] messageData = message.getBytes(); // Converts the message into a byte array
 				try {
+					String encryptedMessage = encryptMessage(message); // Encrypt the message
 					if (usingUDP) {
 						// Send message via UDP
-						DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
+						DatagramPacket messagePacket = new DatagramPacket(encryptedMessage.getBytes(), encryptedMessage.getBytes().length,
 								new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
 						messageSocket.send(messagePacket);
 					} else {
 						// Send message via TCP
 						OutputStream os = tcpMessageSocket.getOutputStream();
-						os.write(messageData);
+						os.write(encryptedMessage.getBytes());
 						os.flush();
 					}
 
 					textArea.append("You: " + message + newline); // Display message in GUI
 					inputTextField.setText(""); // Clear the inputTextField
-				} catch (IOException ex) {
+				} catch (Exception ex) {
 					ex.printStackTrace();
 				}
 			}
 		} else if (e.getSource() == callButton) {
 
 			if (callActive) {
-				callActive = false;
-				callButton.setText("Call");
-
-				if (targetLine != null && targetLine.isOpen()) {
-					targetLine.stop();
-					targetLine.close();
-				}
-				if (sourceLine != null && sourceLine.isOpen()) {
-					sourceLine.stop();
-					sourceLine.close();
-				}
+				terminateCall();
 				return;
 			}
 			callActive = true;
@@ -337,12 +340,18 @@ public class App extends Frame implements WindowListener, ActionListener {
 						sourceLine.write(buffer, 0, bytesRead);
 					}
 				} catch (LineUnavailableException | IOException ex) {
+                    if(transition) {
+                        return;
+                    }
 					ex.printStackTrace();
 				}
 			}).start();
 		} else if (e.getSource() == switchProtocolButton) {
 
 			// Switch between UDP and TCP
+            transition = true;
+            if(callActive)
+                terminateCall();
 
 			if (usingUDP) {
 
@@ -365,9 +374,41 @@ public class App extends Frame implements WindowListener, ActionListener {
 				switchProtocolButton.setText("Switch to TCP");
 				textArea.append("Switched to UDP protocol." + newline);
 			}
+            transition = false;
 		}
 
 	}
+
+    private void terminateCall() {
+        callActive = false;
+        callButton.setText("Call");
+
+        if (targetLine != null && targetLine.isOpen()) {
+            targetLine.stop();
+            targetLine.close();
+        }
+        if (sourceLine != null && sourceLine.isOpen()) {
+            sourceLine.stop();
+            sourceLine.close();
+        }
+    }
+
+    static String encryptMessage(String message) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        SecretKeySpec keySpec = new SecretKeySpec(KEY.getBytes(), "AES");
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+        byte[] encryptedBytes = cipher.doFinal(message.getBytes());
+        return Base64.getEncoder().encodeToString(encryptedBytes); // Encode the encrypted bytes to a string
+    }
+
+    static String decryptMessage(String encryptedMessage) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        SecretKeySpec keySpec = new SecretKeySpec(KEY.getBytes(), "AES");
+        cipher.init(Cipher.DECRYPT_MODE, keySpec);
+        byte[] decodedBytes = Base64.getDecoder().decode(encryptedMessage);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return new String(decryptedBytes); // Return the decrypted message
+    }
 
 	/**
 	 * These methods have to do with the GUI. You can use them if you wish to define
@@ -387,7 +428,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 	@Override
 	public void windowClosing(WindowEvent e) {
 		// TODO Auto-generated method stub
-
+        transition = true;
 		deinitUDPSockets();
 		deinitTCPSockets();
 

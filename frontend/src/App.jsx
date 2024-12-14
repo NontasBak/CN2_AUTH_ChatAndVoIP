@@ -103,6 +103,7 @@ function App() {
             .post("http://localhost:8099/api/switchProtocol")
             .then(() => {
                 setUsingUDP(!usingUDP);
+                setCallActive(false);
                 console.log(`Switched to ${usingUDP ? "TCP" : "UDP"} protocol`);
             })
             .catch((error) => console.error(error));

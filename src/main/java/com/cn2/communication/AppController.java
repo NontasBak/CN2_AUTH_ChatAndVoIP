@@ -10,8 +10,10 @@ import java.io.*;
 import javax.sound.sampled.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
+
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.spec.SecretKeySpec;
 
 @RestController
 @RequestMapping("/api")
@@ -46,6 +48,10 @@ public class AppController {
     static Socket tcpVoiceSocket; // Client-side TCP socket for voice
 
     static boolean usingUDP = true; // Default to UDP protocol
+    static boolean transition = false; // Flag to indicate a protocol switch
+
+    // For encryption
+    static final String KEY = "123456789ABCDEFG"; // 16-byte key
 
     static {
 		try {
@@ -63,13 +69,13 @@ public class AppController {
 
         // Start a thread to listen for incoming messages
         new Thread(() -> {
-            byte[] buffer = new byte[1024];
             while (true) {
                 try {
                     if (usingUDP) {
+                        byte[] buffer = new byte[1024];
                         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                         messageSocket.receive(packet); // Waits for an incoming message on the message socket
-                        String receivedMessage = new String(packet.getData(), 0, packet.getLength()); // Extracts the received data and convert it to a string
+                        String receivedMessage = decryptMessage(new String(packet.getData(), 0, packet.getLength()));
                         synchronized (messages) {
                             messages.add("Remote: " + receivedMessage); // Store the message
                         }
@@ -77,13 +83,18 @@ public class AppController {
                         BufferedReader reader = new BufferedReader(new InputStreamReader(tcpMessageSocket.getInputStream()));
                         String receivedMessage = reader.readLine(); // Read incoming message line by line
                         if (receivedMessage != null) {
+                            receivedMessage = decryptMessage(receivedMessage);
                             synchronized (messages) {
                                 messages.add("Remote: " + receivedMessage); // Store the message
                             }
                         }
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
+                } catch (Exception e) {
+                    // System.out.println("womp" + transition);
+                    if (transition) {
+                        continue;
+                    }
+                    System.out.println("Error receiving message: " + e.getMessage() + transition);
                 }
             }
         }).start();
@@ -104,16 +115,16 @@ public class AppController {
             String message = jsonNode.get("message").asText();
             
             if (!message.isEmpty()) {
-                byte[] messageData = message.getBytes(); // Converts the message into a byte array
+                String encryptedMessage = encryptMessage(message);
                 
                 try {
                     if (usingUDP) {
-                        DatagramPacket messagePacket = new DatagramPacket(messageData, messageData.length,
+                        DatagramPacket messagePacket = new DatagramPacket(encryptedMessage.getBytes(), encryptedMessage.getBytes().length,
                             new InetSocketAddress(REMOTE_IP, REMOTE_PORT_MESSAGE));
                         messageSocket.send(messagePacket); // Send messagePacket via the messageSocket
                     } else {
                         OutputStream os = tcpMessageSocket.getOutputStream();
-                        os.write(messageData);
+                        os.write(encryptedMessage.getBytes());
                         os.flush();
                     }
                 } catch (IOException e) {
@@ -124,7 +135,7 @@ public class AppController {
                     messages.add("Local: " + message);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -182,7 +193,10 @@ public class AppController {
                     sourceLine.write(buffer, 0, bytesRead);
                 }
             } catch (LineUnavailableException | IOException ex) {
-                ex.printStackTrace();
+                if(transition) {
+                    return;
+                }
+                System.out.println("Error in call: " + ex.getMessage());
             }
         }).start();
     }
@@ -222,22 +236,12 @@ public class AppController {
         }
     }
 
-    @GetMapping("/isTalking")
-    public boolean isTalking(@RequestParam String jsonUserId) {
-        int userId = -1;
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode jsonNode = objectMapper.readTree(jsonUserId);
-            userId = jsonNode.get("userId").asInt();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
     @PostMapping("/switchProtocol")
     public void switchProtocol() {
+        transition = true;
+        if (callActive)
+            endCall("{\"userId\": 0}");
+        
         if (usingUDP) {
             // Switch to TCP
             deinitUDPSockets();
@@ -249,6 +253,30 @@ public class AppController {
             initUDPSockets();
             usingUDP = true;
         }
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Thread sleep interrupted: " + e.getMessage());
+        }
+        transition = false;
+    }
+
+    static String encryptMessage(String message) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        SecretKeySpec keySpec = new SecretKeySpec(KEY.getBytes(), "AES");
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec);
+        byte[] encryptedBytes = cipher.doFinal(message.getBytes());
+        return Base64.getEncoder().encodeToString(encryptedBytes); // Encode the encrypted bytes to a string
+    }
+
+    static String decryptMessage(String encryptedMessage) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        SecretKeySpec keySpec = new SecretKeySpec(KEY.getBytes(), "AES");
+        cipher.init(Cipher.DECRYPT_MODE, keySpec);
+        byte[] decodedBytes = Base64.getDecoder().decode(encryptedMessage);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return new String(decryptedBytes); // Return the decrypted message
     }
 
     private void initUDPSockets() {
