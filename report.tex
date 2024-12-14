@@ -1,0 +1,91 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{hyperref}
+
+\title{P2P Chat and VoIP Application using UDP in Java}
+
+\author{
+    \small Aristotle University of Thessaloniki - Department of Electrical and Computer Engineering \\[0.5em]
+    \small Computer Networks II\\[1.5em]
+    Epameinondas Bakoulas and Maria Sotiria Kostomanolaki \\[1em]
+}
+
+\date{December 2024}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents the development of a Peer-to-Peer (P2P) Chat and Voice over IP (VoIP) application, created as part of the 
+Computer Networks II course at Aristotle University of Thessaloniki. The application is built using Java's \texttt{java.net} 
+library to manage network communications. 
+
+The project demonstrates a deeper understanding of Internet Protocols (IP) by allowing users to switch between UDP and TCP protocols 
+through a command. This feature highlights the trade-offs between speed and reliability in network communications. 
+Additionally, cryptographic techniques are integrated to secure data exchanges, ensuring the privacy and integrity of communications.
+\end{abstract}
+
+\section {UDP Chat and VoIP Application}
+
+\subsection{Variables}
+The application uses two \texttt{DatagramSocket} objects:
+\begin{itemize}
+    \item \texttt{messageSocket} for handling message communication
+    \item \texttt{voiceSocket} for handling voice data
+\end{itemize}
+This separation is important to avoid conflicts between the different types of data (text and voice) that are transmitted over UDP, 
+as each socket is dedicated to a specific purpose. Additionally, the application uses four \texttt{ports}:
+\begin{itemize}
+    \item \textbf{Local Ports}: \texttt{LOCAL_PORT_MESSAGE (12345)} is used for receiving messages, and \texttt{LOCAL_PORT_VOICE (12346)} is used 
+    for receiving voice data. Each type of communication (messages and voice) requires a dedicated port to \textbf{listen} for incoming data.
+    \item \textbf{Remote Ports}: \texttt{REMOTE_PORT_MESSAGE (12345)} is used for sending messages to the remote peer, and \texttt{REMOTE_PORT_VOICE (12346)} 
+    is used for sending voice data. These ports ensure that data is \textbf{sent} to the appropriate destination, depending on whether it is a message or voice.
+\end{itemize}
+This setup enables efficient, organized handling of different data streams (text vs. voice) and ensures that there are no interference or 
+data delivery issues for each type of communication.
+
+\subsection{Initialization Process and Socket Management}
+The application ensures efficient resource management and smooth communication by dynamically handling socket initialization. Below is an 
+itemized explanation of the initialization process:
+
+\begin{enumerate}
+\item \textbf{Default UDP Initialization (in App constructor):}
+        \begin{itemize}  
+        \item Method Used: \texttt{initUDPSockets()}
+        \item When Used: On app startup or when the user switches to UDP via the protocol switch button.
+        \item What It Does: Creates and binds UDP sockets for messaging and voice communication using predefined local ports. This allows the app to start 
+        communication immediately using the UDP protocol.
+        \end{itemize}
+\item \textbf{Switching to TCP (in switchToTCP() method):}
+        \begin{itemize}
+        \item Methods Used: \texttt{initTCPSockets()}
+        \item When Used: When the user switches to TCP via the protocol switch button.
+        \item What It Does: Creates TCP server sockets for listening and establishes client connections for messaging and voice communication.
+        \end{itemize}
+
+\item \textbf{Releasing Resources (in switchToUDP() and switchToTCP() methods):}
+        \begin{itemize}
+        \item Methods Used: \texttt{deinitUDPSockets()} and /texttt{deinitTCPSockets()} 
+        \item When Used: Before switching to a different protocol.
+        \item What It Does: Ensures that sockets from the inactive protocol are properly closed, freeing up the associated resources and avoiding conflicts on the same ports.
+        \end{itemize}
+\end{enumerate}
+This modular approach minimizes resource usage, prevents port conflicts, and allows seamless protocol switching without restarting the application.
+
+
+
+
+
+
+
+
+
+
+\section{References}
+\begin{itemize}
+    \item GitHub Repository: \url{https://github.com/siavvasm/CN2_AUTH_ChatAndVoIP}
+\end{itemize}
+
+\end{document}
