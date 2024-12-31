@@ -72,6 +72,7 @@ public class AppController {
             while (true) {
                 try {
                     if (usingUDP) {
+                        // UDP Logic
                         byte[] buffer = new byte[1024];
                         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                         messageSocket.receive(packet); // Waits for an incoming message on the message socket
@@ -80,6 +81,7 @@ public class AppController {
                             messages.add("Remote: " + receivedMessage); // Store the message
                         }
                     } else {
+                        // TCP Logic
                         BufferedReader reader = new BufferedReader(new InputStreamReader(tcpMessageSocket.getInputStream()));
                         String receivedMessage = reader.readLine(); // Read incoming message line by line
                         if (receivedMessage != null) {
@@ -90,7 +92,6 @@ public class AppController {
                         }
                     }
                 } catch (Exception e) {
-                    // System.out.println("womp" + transition);
                     if (transition) {
                         continue;
                     }
@@ -201,38 +202,20 @@ public class AppController {
         }).start();
     }
 
-    private boolean detectTalking(byte[] audioData, int length) {
-        double rms = 0.0;
-        for (int i = 0; i < length; i++) {
-            rms += audioData[i] * audioData[i];
-        }
-        rms = Math.sqrt(rms / length);
-        return rms > 0.01; // Adjust threshold as needed
-    }
-
     @PostMapping("/endCall")
-    public void endCall(@RequestBody String jsonUserId) {
+    public void endCall() {
         if (!callActive) {
             return;
         }
+        callActive = false;
 
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode jsonNode = objectMapper.readTree(jsonUserId);
-            int userId = jsonNode.get("userId").asInt();
-
-            callActive = false;
-
-            if (targetLine != null && targetLine.isOpen()) {
-                targetLine.stop();
-                targetLine.close();
-            }
-            if (sourceLine != null && sourceLine.isOpen()) {
-                sourceLine.stop();
-                sourceLine.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (targetLine != null && targetLine.isOpen()) {
+            targetLine.stop();
+            targetLine.close();
+        }
+        if (sourceLine != null && sourceLine.isOpen()) {
+            sourceLine.stop();
+            sourceLine.close();
         }
     }
 
@@ -240,7 +223,7 @@ public class AppController {
     public void switchProtocol() {
         transition = true;
         if (callActive)
-            endCall("{\"userId\": 0}");
+            endCall();
         
         if (usingUDP) {
             // Switch to TCP

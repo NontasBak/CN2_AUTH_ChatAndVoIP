@@ -265,7 +265,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 			if (!message.isEmpty()) {
 				try {
-					String encryptedMessage = encryptMessage(message); // Encrypt the message
+					String encryptedMessage = encryptMessage(message);
 					if (usingUDP) {
 						// Send message via UDP
 						DatagramPacket messagePacket = new DatagramPacket(encryptedMessage.getBytes(), encryptedMessage.getBytes().length,

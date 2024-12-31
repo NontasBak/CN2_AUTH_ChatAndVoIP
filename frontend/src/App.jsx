@@ -87,7 +87,7 @@ function App() {
     };
 
     const endCall = () => {
-        console.log("Ending call for userId:", userId);
+        console.log("Ending call for userId:");
         axios
             .post("http://localhost:8099/api/endCall", { userId })
             .then(() => {
@@ -112,7 +112,7 @@ function App() {
     return (
         <div className="flex flex-col items-center pt-8 text-2xl gap-4 h-screen">
             <h1 className="text-3xl font-semibold">Chat App</h1>
-            <div className="p-4 w-1/2 h-1/2 border border-gray-400">
+            <div className="p-4 w-1/2 h-1/2 border-2 rounded-xl border-gray-500">
                 <div className="overflow-y-scroll w-full h-full flex flex-col pr-3">
                     {messages.map((msg, index) => (
                         <div
