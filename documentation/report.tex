@@ -141,9 +141,7 @@ In Figure 2, we observe the packets being sent and received between the two devi
     \label{fig:udp-messages-3}
 \end{figure}
 
-\newpage An important observation is that sending packets larger than 1024 bytes (after encryption) will not be successfully received by the other peer. This limitation arises because the application uses a fixed buffer size of 1024 bytes for processing incoming data. To handle larger packets, either the buffer size must be increased, or the message must be split into smaller packets that fit within the buffer size.
-
-This phenomenon is illustrated in Figure 5, where we see the message being fragmented due to its size exceeding the buffer limit. 
+\newpage We can also observe that messages larger than the Maximum Transmission Unit (MTU) size of UDP packets are fragmented and reassembled on the receiver, as shown in Figure 5. This process of fragmentation and reassembly is inherent to UDP communication when transmitting data that exceeds the MTU size.
 
 
 \begin{figure}[h!]
