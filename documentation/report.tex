@@ -19,13 +19,9 @@
 \maketitle
 
 \begin{abstract}
-This report presents the development of a Peer-to-Peer (P2P) Chat and Voice over IP (VoIP) application, created as part of the 
-Computer Networks II course at Aristotle University of Thessaloniki. The application is built using Java's \texttt{java.net} 
-library to manage network communications. 
+This report presents the development of a Peer-to-Peer (P2P) Chat and Voice over IP (VoIP) application, created as part of the Computer Networks II course at Aristotle University of Thessaloniki. The application uses Java's \texttt{java.net} library for network communications, providing hands-on experience with real-time data exchange and concurrency. Designed for communication between two peers, it supports instant messaging and multimedia data transfer.
 
-The project demonstrates a deeper understanding of Internet Protocols (IP) by allowing users to switch between UDP and TCP protocols 
-through a command. This feature highlights the trade-offs between speed and reliability in network communications. 
-Additionally, cryptographic techniques are integrated to secure data exchanges, ensuring the privacy and integrity of communications.
+The project also explores the concept of switching between UDP and TCP protocols to understand their trade-offs. Although implementing the switch to TCP did not result in a functional feature, this exploration deepened our understanding of Internet Protocols, challenges posed by NAT (Network Address Translation), and the role of port forwarding in enabling P2P communication. Additionally, cryptographic techniques were integrated to secure the exchanged data, emphasizing the importance of privacy in P2P communication.
 \end{abstract}
 
 \section {UDP Chat and VoIP Application}
@@ -59,12 +55,6 @@ itemized explanation of the initialization process:
         \item What It Does: Creates and binds UDP sockets for messaging and voice communication using predefined local ports. This allows the app to start 
         communication immediately using the UDP protocol.
         \end{itemize}
-\item \textbf{Switching to TCP:}
-        \begin{itemize}
-        \item Methods Used: \texttt{initTCPSockets()}
-        \item When Used: When the user switches to TCP via the protocol switch button.
-        \item What It Does: Creates TCP server sockets for listening and establishes client connections for messaging and voice communication.
-        \end{itemize}
 
 \item \textbf{Releasing Resources:}
         \begin{itemize}
@@ -76,102 +66,139 @@ itemized explanation of the initialization process:
 This modular approach minimizes resource usage, prevents port conflicts, and allows seamless protocol switching without restarting the application.\
 
 \section{Encryption}
-The application uses the \texttt{AES} encryption algorithm to secure the data exchanged between peers. The encryption key is hardcoded
-in the application and is used to encrypt and decrypt the messages. The key should be exchanged between the two peers securely to ensure
-that the communication is private and secure. There are methods like the \texttt{Diffie-Hellman} key exchange that can be used to securely
-exchange the encryption key between the peers, which is not implemented here but it's worth noting.
+The application uses the \texttt{AES} (Advanced Encryption Standard) algorithm to secure data exchanged between peers. The encryption key is hardcoded within the application and is used for both encrypting and decrypting messages. For optimal security, the key should be exchanged between peers securely to maintain the privacy and integrity of the communication.
+
+While the implementation does not currently include a secure key exchange mechanism, methods such as the \texttt{Diffie-Hellman} key exchange protocol can be employed to securely share encryption keys between peers in a real-world scenario. This is an important consideration for ensuring private communication over potentially insecure networks.
+
+Additionally, an example of the encrypted payload produced by the application can be seen in Section 4, Figures 3 and 4, which illustrate how data is transformed through encryption. This highlights the practical application of the encryption process within the system.
 
 \section{Fullstack Application}
-Using the Java Framework \texttt{Spring Boot} and the frontend library \texttt{React} we created a fullstack application.
-Each backend is allowed to communicate with a single frontend, ensuring that the communication is end-to-end.
-The backend services are exposed via REST APIs, which are consumed by the frontend using the \texttt{Axios} library. 
-This setup allows for efficient and organized communication between the client and server, ensuring that data is 
-exchanged seamlessly and in real-time.
+Using the Java framework \texttt{Spring Boot} for the backend and the frontend library \texttt{React}, we developed a full-stack application. Each backend instance is designed to communicate exclusively with a single frontend instance, ensuring secure and end-to-end communication.
 
-Running the application requires starting both the backend and frontend servers. The backend server is started using the
-\texttt{mvn spring-boot:run} command, while the frontend server is started using the \texttt{npm run dev} command.
+The backend exposes its functionality through REST APIs, which the frontend consumes using the \texttt{Axios} library. This architecture facilitates efficient and structured interaction between the client and server, enabling seamless real-time data exchange.
 
-If someone doesn't want to run the fullstack application, they can run the \texttt{App.java} file that displays the GUI application.
-The two main files of the fullstack application are \texttt{AppController.java} and \texttt{App.jsx}.
+To run the application, both the backend and frontend servers need to be started:
+\begin{itemize}
+    \item \textbf{Backend Server}: Run the command \texttt{mvn spring-boot:run}.
+    \item \textbf{Frontend Server}: Run the command \texttt{npm run dev}.
+\end{itemize}
 
-\begin{figure}[h]
+For users who prefer not to launch the full-stack application, an alternative standalone GUI application can be run by executing the \texttt{App.java} file. This approach bypasses the need for server setups.
+
+The core files of the full-stack application are:
+\begin{itemize}
+    \item \texttt{AppController.java}: Handles backend logic and API endpoints.
+    \item \texttt{App.jsx}: Implements the main frontend component.
+\end{itemize}
+
+The chat application user interface can be seen in Figure 1.
+
+\begin{figure}[h!]
     \centering
-    \includegraphics[width=0.8\textwidth]{chat1.png}
+    \includegraphics[width=0.5\textwidth]{chat1.png}
     \caption{Chat Application User Interface}
     \label{fig:chat1}
 \end{figure}
 
 \section{Wireshark packets}
 
+\subsection{Port Forwarding}
+
+To test the functionality of our application in a remote setting, we utilized \textbf{port forwarding} by creating a custom rule in the NAT and Security settings of our personal Wi-Fi routers. This configuration allowed us to redirect incoming traffic to the appropriate device within our local networks.
+
+In addition to setting up port forwarding, testing required temporarily disabling the firewall on both devices to ensure that the network traffic was not blocked. After exchanging our public IP addresses, we configured the code accordingly by:
+\begin{itemize}
+    \item Setting the \texttt{REMOTE\_IP} variable to the IP address of the other peer.
+    \item Adjusting the number of ports used for communication to match the settings configured in the port forwarding rules.
+\end{itemize}
+
+With these configurations in place, we successfully tested the application's functionality remotely, exchanging messages between two devices across different networks.
+
 \subsection{UDP Messages Packets}
-\begin{figure}[h]
+
+After successfully establishing communication between our two devices and exchanging several messages, we used \textbf{Wireshark} to analyze the network traffic and demonstrate the functionality of the application. The messages exchanged are encrypted using the \texttt{AES} algorithm, ensuring the privacy of the communication. The encryption key used for this process is \texttt{123456789ABCDEFG}.
+
+In Figure 2, we observe the packets being sent and received between the two devices, identified by their distinct IP addresses. This confirms the proper transmission of data between peers. Figures 3 and 4 further illustrate the encryption in action by showing the encrypted payload of the messages. These encrypted messages highlight the security measures implemented in the application, ensuring that sensitive data remains private and inaccessible to unauthorized parties.
+
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-messages-1.png}
     \caption{UDP message packet exchanging with port forwarding}
     \label{fig:udp-messages-1}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-messages-2.png}
     \caption{UDP message packet (encrypted Payload marked)}
     \label{fig:udp-messages-2}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-messages-3.png}
     \caption{UDP message packet (encrypted Payload marked)}
     \label{fig:udp-messages-3}
 \end{figure}
 
-\begin{figure}[h]
+\newpage An important observation is that sending packets larger than 1024 bytes (after encryption) will not be successfully received by the other peer. This limitation arises because the application uses a fixed buffer size of 1024 bytes for processing incoming data. To handle larger packets, either the buffer size must be increased, or the message must be split into smaller packets that fit within the buffer size.
+
+This phenomenon is illustrated in Figure 5, where we see the message being fragmented due to its size exceeding the buffer limit. 
+
+
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-messages-fragmented.png}
     \caption{Large UDP message fragmented}
     \label{fig:udp-messages-4}
 \end{figure}
 
-We can see that the message is encrypted using the \texttt{AES} algorithm, which ensures the privacy of the communication.
-The key used is \texttt{123456789ABCDEFG}.
-
-Sending packets that are larger than 1024 bytes (encrypted) will not be received by the other peer, since the application only
-uses a 1024 byte buffer. To send larger packets, the buffer size should be increased, or we need to split the message into smaller packets.
-
-
-
-
 \subsection{UDP Voice Packets}
 
-The voice packets are continuously sent and received between the two peers. The voice packets are sent in a continuous stream,
-and the application uses a 1024 byte buffer to store the incoming voice data. The buffer is then played back to the user using the
-\texttt{SourceDataLine} class.
+The application supports the exchange of voice data, enabling a form of voice calling between peers. Once both peers activate this feature by pressing the call button, the application establishes a continuous exchange of voice packets (as shown in Figure 6).
 
-\begin{figure}[h]
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-voice-1.png}
     \caption{UDP continuous voice packets}
     \label{fig:udp-voice-1}
 \end{figure}
 
-\begin{figure}[h]
+The voice packets are sent in a continuous stream and stored on the receiving end using a 1024-byte buffer. This buffer temporarily holds the incoming voice data, which is then played back to the user through the \texttt{SourceDataLine} class. The continuous exchange of voice packets stops when the user presses the call button again to end the call. Figures 7 and 8 provide a detailed view of the payload of these voice packets, showcasing the structure and data content exchanged during the voice call.
+
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-voice-2.png}
     \caption{UDP voice packet (Payload marked)}
     \label{fig:udp-voice-2}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[h!]
     \centering
     \includegraphics[width=0.8\textwidth]{udp-voice-3.png}
     \caption{UDP voice packet (Payload marked)}
     \label{fig:udp-voice-3}
 \end{figure}
 
+\section{TCP Implementation and Protocol Switching}
+
+In this project, we explored the implementation of a TCP connection as an alternative to the existing UDP-based communication. To achieve this, we used the following sockets on both sides of the communication:
+
+\begin{itemize}
+    \item \texttt{tcpMessageServerSocket}: Server-side TCP socket for messaging.
+    \item \texttt{tcpMessageSocket}: Client-side TCP socket for messaging.
+    \item \texttt{tcpVoiceServerSocket}: Server-side TCP socket for voice.
+    \item \texttt{tcpVoiceSocket}: Client-side TCP socket for voice.
+\end{itemize}
+
+To integrate protocol switching into the application, we added a protocol switch button to the user interface. This button was designed to allow users to toggle between UDP and TCP protocols for both messaging and voice functionalities. However, despite our efforts, we were unable to overcome the challenges posed by P2P communication and successfully establish a TCP connection. These challenges were primarily related to the barriers introduced by Network Address Translation (NAT) and other network constraints.
+
+Although the TCP implementation did not result in a functional connection, this exploration deepened our understanding of IP protocols and the complexities involved in establishing P2P communication using TCP. The reader is encouraged to review the code to gain further insights into the attempted implementation and the obstacles encountered.
+
 
 \section{References}
 \begin{itemize}
-    \item GitHub Repository: \url{https://github.com/siavvasm/CN2_AUTH_ChatAndVoIP}
+    \item GitHub Repository: \url{https://github.com/NontasBak/CN2_AUTH_ChatAndVoIP}
 \end{itemize}
 
 \end{document}
